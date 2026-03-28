@@ -2,6 +2,7 @@
   "name": "rove",
   "version": "0.1.0",
   "type": "module",
+  "author": "Isaac Nielsen <isnielsen13@gmail.com>",
   "bin": {
     "rove": "./dist/index.js"
   },
