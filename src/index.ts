@@ -21,6 +21,9 @@ const props = {
 
 async function main() {
   while (true) {
+    const rows = process.stdout.rows ?? 24;
+    process.stdout.write('\n'.repeat(rows) + `\x1B[${rows}A`);
+
     let pendingCmd: string | null = null;
 
     const { waitUntilExit } = render(
