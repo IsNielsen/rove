@@ -36,7 +36,7 @@ npm install -g rove
 Or build from source:
 
 ```bash
-git clone https://github.com/your-username/rove.git
+git clone https://github.com/IsNielsen/rove.git
 cd rove
 npm install
 npm run build
