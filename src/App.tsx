@@ -4,6 +4,15 @@ import type { Key } from 'ink';
 import { readChildren, insertAfter, removeDescendants, FileNode } from './utils/files.js';
 import { getGitStatuses, GitStatus } from './utils/git.js';
 
+const KeyBinding = ({ keys, description }: { keys: string[], description: string }) => (
+  <Box gap={2}>
+    <Box width={16}>
+      {keys.map(k => <Text key={k} color="cyan" bold>[{k}]</Text>)}
+    </Box>
+    <Text dimColor>{description}</Text>
+  </Box>
+);
+
 interface Props {
   cwd: string;
   gitMode: boolean;
@@ -35,6 +44,7 @@ export default function App({ cwd, gitMode, maxDepth, onCommand }: Props) {
   const [suffix, setSuffix] = useState('');
   const [fileToggled, setFileToggled] = useState(false);
   const [gitMap, setGitMap] = useState<Map<string, GitStatus>>(new Map());
+  const [showHelp, setShowHelp] = useState(false);
 
   const treeHeight = Math.max(1, termSize.rows - 2);
 
@@ -109,7 +119,12 @@ export default function App({ cwd, gitMode, maxDepth, onCommand }: Props) {
   }
 
   useInput((input, key) => {
+    if (showHelp) {
+      setShowHelp(false);
+      return;
+    }
     if (mode === 'nav') {
+      if (input === '?' && !key.ctrl && !key.meta) { setShowHelp(true); return; }
       if (key.upArrow) moveCursor(nav.cursor - 1);
       else if (key.downArrow) moveCursor(nav.cursor + 1);
       else if (key.leftArrow && selectedNode?.isDir) doCollapse(selectedNode);
@@ -131,6 +146,29 @@ export default function App({ cwd, gitMode, maxDepth, onCommand }: Props) {
       else setSuffix(s => editText(s, input, key));
     }
   });
+
+  if (showHelp) {
+    return (
+      <Box borderStyle="round" padding={1} flexDirection="column">
+        <Text bold>Keybindings</Text>
+        <Text> </Text>
+        <KeyBinding keys={['↑', 'k']} description="Move up" />
+        <KeyBinding keys={['↓', 'j']} description="Move down" />
+        <KeyBinding keys={['→', 'l']} description="Expand directory" />
+        <KeyBinding keys={['←', 'h']} description="Collapse directory" />
+        <KeyBinding keys={['gg']} description="Jump to top" />
+        <KeyBinding keys={['G']} description="Jump to bottom" />
+        <KeyBinding keys={['/']} description="Filter files" />
+        <KeyBinding keys={['Tab']} description="Insert filename" />
+        <KeyBinding keys={['Enter']} description="Run command" />
+        <KeyBinding keys={['Esc']} description="Cancel / back" />
+        <KeyBinding keys={['?']} description="Toggle this help" />
+        <KeyBinding keys={['q']} description="Quit" />
+        <Text> </Text>
+        <Text dimColor>Press any key to close</Text>
+      </Box>
+    );
+  }
 
   return (
     <Box flexDirection="column">
