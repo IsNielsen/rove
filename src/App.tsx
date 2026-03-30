@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
 import type { Key } from 'ink';
+import { dirname } from 'path';
 import { readChildren, insertAfter, removeDescendants, FileNode } from './utils/files.js';
 import { getGitStatuses, GitStatus } from './utils/git.js';
 export interface HistoryEntry {
@@ -22,6 +23,7 @@ interface Props {
   gitMode: boolean;
   maxDepth: number;
   onCommand: (cmd: string) => void;
+  onCwdChange?: (cwd: string) => void;
   showBanner?: boolean;
   history?: HistoryEntry[];
 }
@@ -43,10 +45,11 @@ function editText(prev: string, input: string, key: Key): string {
   return prev;
 }
 
-export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = true, history = [] }: Props) {
+export default function App({ cwd: initialCwd, gitMode, maxDepth, onCommand, onCwdChange, showBanner = true, history = [] }: Props) {
   const { exit } = useApp();
 
-  const [nodes, setNodes] = useState<FileNode[]>(() => readChildren(cwd, 0));
+  const [cwd, setCwd] = useState(initialCwd);
+  const [nodes, setNodes] = useState<FileNode[]>(() => readChildren(initialCwd, 0));
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // cursor + scrollOffset batched together to avoid double re-render per keypress
   const [nav, setNav] = useState({ cursor: 0, offset: 0 });
@@ -145,6 +148,16 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
     setExpanded(prev => new Set(prev).add(node.path));
   }
 
+  function navigateUp() {
+    const parent = dirname(cwd);
+    if (parent === cwd) return; // already at filesystem root
+    setCwd(parent);
+    setNodes(readChildren(parent, 0));
+    setExpanded(new Set());
+    setNav({ cursor: 0, offset: 0 });
+    onCwdChange?.(parent);
+  }
+
   function doCollapse(node: FileNode) {
     if (!node.isDir || !expanded.has(node.path)) return;
     setNodes(prev => removeDescendants(prev, node.path, node.depth));
@@ -203,6 +216,7 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
       }
 
       else if (input === 'q' && !key.ctrl && !key.meta) exit();
+      else if (input === '-' && !key.ctrl && !key.meta) navigateUp();
       else if (input === '/' && !key.ctrl && !key.meta) setMode('filter');
       else if (key.tab) {
         const insertion = selectedNode ? selectedNode.path + ' ' : '';
@@ -266,6 +280,7 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
         <KeyBinding keys={['←', 'h']} description="Collapse directory" />
         <KeyBinding keys={['gg']} description="Jump to top" />
         <KeyBinding keys={['G']} description="Jump to bottom" />
+        <KeyBinding keys={['-']} description="Go to parent directory" />
         <KeyBinding keys={['/']} description="Filter files" />
         <KeyBinding keys={['Tab']} description="Insert filename" />
         <KeyBinding keys={['Enter']} description="Run command" />

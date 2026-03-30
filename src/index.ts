@@ -16,8 +16,9 @@ program
 
 const opts = program.opts();
 
+let currentCwd = process.cwd();
+
 const props = {
-  cwd: process.cwd(),
   gitMode: Boolean(opts['git']),
   maxDepth: parseInt(opts['depth'] as string, 10),
 };
@@ -35,10 +36,14 @@ async function main() {
     const { waitUntilExit } = render(
       React.createElement(App, {
         ...props,
+        cwd: currentCwd,
         showBanner: firstRun && Boolean(opts['banner']),
         history,
         onCommand: (cmd: string) => {
           pendingCmd = cmd;
+        },
+        onCwdChange: (newCwd: string) => {
+          currentCwd = newCwd;
         },
       })
     );
