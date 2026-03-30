@@ -269,6 +269,9 @@ export default function App({ cwd, gitMode, maxDepth, showWelcome, onCommand, sh
           <Text> </Text>
         </Box>
       </Box>
+    );
+  }
+
   if (showHelp) {
     return (
       <Box borderStyle="round" padding={1} flexDirection="column">
