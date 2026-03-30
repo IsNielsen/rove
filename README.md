@@ -67,43 +67,71 @@ rove -g -d 2      # Combine options
 
 `rove` is a command launcher, not a file manager. The idea: navigate to a file, type a command, run it.
 
+After a command runs, `rove` comes back with a history panel showing previous output. Navigate to another file and run another command, or press `q` to exit.
+
 ### Navigation
 
 | Key | Action |
 |-----|--------|
-| `↑` / `↓` | Move cursor up and down |
-| `→` | Expand a directory |
-| `←` | Collapse a directory |
+| `↑` / `k` | Move cursor up |
+| `↓` / `j` | Move cursor down |
+| `→` / `l` | Expand a directory |
+| `←` / `h` | Collapse a directory |
+| `gg` | Jump to top |
+| `G` | Jump to bottom |
+| `-` | Go to parent directory |
+| `/` | Filter files by name |
+| `?` | Show keybindings help |
 | `q` | Quit |
 
 ### Running Commands
 
-Start typing any character and you enter **command mode**. The bottom bar shows your command assembling in real time:
+Press `:` to open the command bar, or press `Tab` to open it with the selected file pre-inserted.
 
 ```
-vim  [filename]  ▌   [Tab] toggle file  [↵] run  [Esc] cancel
+> vim src/index.ts█   [Tab] insert file  [↵] run  [Esc] cancel
 ```
 
 | Key | Action |
 |-----|--------|
-| Any character | Start/continue typing your command (prefix) |
-| `Tab` | Toggle the selected filename on/off; move to suffix |
-| `Tab` (again) | Type after the filename (suffix), or toggle it back off |
-| `Enter` | Run the assembled command |
+| `:` | Open command bar (empty) |
+| `Tab` (nav mode) | Open command bar with selected file inserted |
+| `Tab` (cmd mode) | Insert selected filename at cursor position |
+| `↑` / `↓` | Recall previous commands from history |
+| `Ctrl+A` / `Ctrl+E` | Move cursor to start / end of line |
+| `Ctrl+W` | Delete word before cursor |
+| `Ctrl+U` | Clear the command bar |
+| `Enter` | Run the command |
 | `Esc` | Cancel and return to navigation |
 
-The command is assembled as: `prefix [filename] suffix`
+### Filtering
+
+Press `/` to enter filter mode. The tree narrows as you type, showing only matching files and their parent directories.
+
+| Key | Action |
+|-----|--------|
+| `Enter` | Confirm filter, return to navigation |
+| `Esc` | Clear filter and return to navigation |
 
 ### Examples
 
 | What you type | What runs |
 |---------------|-----------|
-| `vim` → Tab → Enter | `vim /path/to/file` |
-| `git add` → Tab → Enter | `git add /path/to/file` |
-| `cat` → Tab → ` \| grep foo` → Enter | `cat /path/to/file \| grep foo` |
-| `rm` → Enter (no Tab) | `rm` — runs without a filename if Tab wasn't pressed |
+| `:` → `vim ` → Tab → Enter | `vim src/index.ts` |
+| Tab → `git add` → Enter | `git add src/index.ts` |
+| `:` → `cat ` → Tab → ` \| grep foo` → Enter | `cat src/index.ts \| grep foo` |
+| `/` → `App` → Enter → Tab → `vim` → Enter | `vim src/App.tsx` |
 
-After a command runs, `rove` comes back. You can navigate to another file and run another command, or press `q` to exit.
+### New to terminal editors?
+
+If you're used to VSCode or Google Docs, here are good starting points:
+
+| Editor | Install | Best for |
+|--------|---------|----------|
+| `nano <file>` | pre-installed on most systems | Simplest terminal editor; hints shown at the bottom of the screen |
+| `micro <file>` | `brew install micro` / `snap install micro` | Feels most like a normal editor — familiar shortcuts like Ctrl+S, Ctrl+Z |
+
+With `rove`, you can navigate to any file, press `Tab`, type `nano` (or `micro`), and hit Enter.
 
 ---
 
@@ -117,7 +145,20 @@ Run with `-g` to see git status colors in the file tree:
 | Green | Untracked (new file) |
 | Dimmed | Ignored (matches `.gitignore`) |
 
+Press `r` to manually refresh git status. It also auto-refreshes every 30 seconds.
+
 Works in any git repository. In non-git directories, the flag is silently ignored.
+
+---
+
+## History Panel
+
+After running commands, a history panel appears at the bottom of the screen showing previous command output. Scroll through it while navigating the file tree:
+
+| Key | Action |
+|-----|--------|
+| `[` or `Shift+↑` | Scroll history up |
+| `]` or `Shift+↓` | Scroll history down |
 
 ---
 
