@@ -1,14 +1,8 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
 import type { Key } from 'ink';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
 import { readChildren, insertAfter, removeDescendants, FileNode } from './utils/files.js';
 import { getGitStatuses, GitStatus } from './utils/git.js';
-
-const VERSION = '0.1.0';
-const CONFIG_PATH = path.join(os.homedir(), '.rove', 'config.json');
 const KeyBinding = ({ keys, description }: { keys: string[], description: string }) => (
   <Box gap={2}>
     <Box width={16}>
@@ -22,7 +16,6 @@ interface Props {
   cwd: string;
   gitMode: boolean;
   maxDepth: number;
-  showWelcome: boolean;
   onCommand: (cmd: string) => void;
   showBanner?: boolean;
   lastCmd?: string;
@@ -46,10 +39,9 @@ function editText(prev: string, input: string, key: Key): string {
   return prev;
 }
 
-export default function App({ cwd, gitMode, maxDepth, showWelcome, onCommand, showBanner = true, lastCmd = '', outputLines = [] }: Props) {
+export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = true, lastCmd = '', outputLines = [] }: Props) {
   const { exit } = useApp();
 
-  const [welcomeVisible, setWelcomeVisible] = useState(showWelcome);
   const [nodes, setNodes] = useState<FileNode[]>(() => readChildren(cwd, 0));
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // cursor + scrollOffset batched together to avoid double re-render per keypress
@@ -163,15 +155,6 @@ export default function App({ cwd, gitMode, maxDepth, showWelcome, onCommand, sh
   }
 
   useInput((input, key) => {
-    if (welcomeVisible) {
-      setWelcomeVisible(false);
-      try {
-        fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
-        fs.writeFileSync(CONFIG_PATH, JSON.stringify({ hasSeenWelcome: true }));
-      } catch {
-        // best-effort write
-      }
-    }
     if (showHelp) {
       setShowHelp(false);
       return;
@@ -251,26 +234,6 @@ export default function App({ cwd, gitMode, maxDepth, showWelcome, onCommand, sh
       }
     }
   });
-
-  if (welcomeVisible) {
-    return (
-      <Box flexDirection="column" alignItems="center" justifyContent="center" height={termSize.rows}>
-        <Box flexDirection="column" borderStyle="round" paddingX={3} paddingY={1}>
-          <Text> </Text>
-          <Text bold>rove  v{VERSION}</Text>
-          <Text> </Text>
-          <Text>Navigate your files, then wrap</Text>
-          <Text>them in any shell command.</Text>
-          <Text> </Text>
-          <Text>Press ? for keybindings</Text>
-          <Text>Press q to quit</Text>
-          <Text> </Text>
-          <Text>Press any key to start</Text>
-          <Text> </Text>
-        </Box>
-      </Box>
-    );
-  }
 
   if (showHelp) {
     return (
