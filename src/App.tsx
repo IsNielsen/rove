@@ -3,6 +3,11 @@ import { Box, Text, useInput, useApp } from 'ink';
 import type { Key } from 'ink';
 import { readChildren, insertAfter, removeDescendants, FileNode } from './utils/files.js';
 import { getGitStatuses, GitStatus } from './utils/git.js';
+export interface HistoryEntry {
+  cmd: string;
+  lines: string[];
+}
+
 const KeyBinding = ({ keys, description }: { keys: string[], description: string }) => (
   <Box gap={2}>
     <Box width={16}>
@@ -18,8 +23,7 @@ interface Props {
   maxDepth: number;
   onCommand: (cmd: string) => void;
   showBanner?: boolean;
-  lastCmd?: string;
-  outputLines?: string[];
+  history?: HistoryEntry[];
 }
 
 type Mode = 'nav' | 'cmd' | 'filter';
@@ -39,7 +43,7 @@ function editText(prev: string, input: string, key: Key): string {
   return prev;
 }
 
-export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = true, lastCmd = '', outputLines = [] }: Props) {
+export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = true, history = [] }: Props) {
   const { exit } = useApp();
 
   const [nodes, setNodes] = useState<FileNode[]>(() => readChildren(cwd, 0));
@@ -57,10 +61,22 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
   const [showHelp, setShowHelp] = useState(false);
   const lastGPress = useRef<number>(0);
   const [filterQuery, setFilterQuery] = useState('');
-  const [outputScroll, setOutputScroll] = useState(0);
+  const [historyScroll, setHistoryScroll] = useState(0);
 
-  const treeHeight = Math.max(1, termSize.rows - 2 - (showBanner ? BANNER.length : 0));
-  const hasOutput = outputLines.length > 0 && outputLines.some(l => l.length > 0);
+  const HISTORY_PANEL_HEIGHT = 8;
+
+  const historyLog = useMemo(() => {
+    const lines: string[] = [];
+    for (const entry of history) {
+      lines.push(`$ ${entry.cmd}`);
+      for (const l of entry.lines) lines.push(l);
+    }
+    return lines;
+  }, [history]);
+  const hasHistory = historyLog.length > 0;
+
+  const historyPanelRows = hasHistory ? HISTORY_PANEL_HEIGHT + 1 : 0;
+  const treeHeight = Math.max(1, termSize.rows - 2 - (showBanner ? BANNER.length : 0) - historyPanelRows);
 
   useEffect(() => {
     const onResize = () =>
@@ -74,6 +90,10 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
     const id = setTimeout(() => setGitMap(getGitStatuses(cwd)), 0);
     return () => clearTimeout(id);
   }, []);
+
+  useEffect(() => {
+    setHistoryScroll(Math.max(0, historyLog.length - HISTORY_PANEL_HEIGHT));
+  }, [historyLog.length]);
 
   const visibleNodes = useMemo(() => {
     if (!filterQuery) return nodes;
@@ -162,11 +182,11 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
     if (mode === 'nav') {
 
       if (input === '?' && !key.ctrl && !key.meta) { setShowHelp(true); return; }
-      const maxScroll = Math.max(0, outputLines.length - treeHeight + 2);
-      if (((key.upArrow && key.shift) || input === '[') && hasOutput) {
-        setOutputScroll(s => Math.max(0, s - 1));
-      } else if (((key.downArrow && key.shift) || input === ']') && hasOutput) {
-        setOutputScroll(s => Math.min(maxScroll, s + 1));
+      const maxScroll = Math.max(0, historyLog.length - HISTORY_PANEL_HEIGHT);
+      if (((key.upArrow && key.shift) || input === '[') && hasHistory) {
+        setHistoryScroll(s => Math.max(0, s - 1));
+      } else if (((key.downArrow && key.shift) || input === ']') && hasHistory) {
+        setHistoryScroll(s => Math.min(maxScroll, s + 1));
       } else if (key.upArrow || (input === 'k' && !key.ctrl && !key.meta)) moveCursor(nav.cursor - 1);
       else if (key.downArrow || (input === 'j' && !key.ctrl && !key.meta)) moveCursor(nav.cursor + 1);
       else if ((key.leftArrow || (input === 'h' && !key.ctrl && !key.meta)) && selectedNode?.isDir) doCollapse(selectedNode);
@@ -291,7 +311,7 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
       {mode === 'nav' && filterQuery ? (
         <Text dimColor>  [/] filter: {filterQuery}  ↑↓ move  ←→ fold  [/] re-filter  q quit</Text>
       ) : mode === 'nav' ? (
-        <Text dimColor>  ↑↓ move  ←→ fold  [type] run  q quit{hasOutput ? '  [[] ] scroll output' : ''}</Text>
+        <Text dimColor>  ↑↓ move  ←→ fold  [type] run  q quit{hasHistory ? '  [[] ] scroll history' : ''}</Text>
       ) : mode === 'filter' ? (
         <Box>
           <Text color="cyan">/ {filterQuery}█</Text>
@@ -309,41 +329,19 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
     </>
   );
 
-  if (hasOutput) {
-    const panelLines = treeHeight - 2;
-    const visibleOutput = outputLines.slice(outputScroll, outputScroll + panelLines);
-    const canScroll = outputLines.length > panelLines;
-
-    return (
-      <Box flexDirection="row">
-        <Box flexDirection="column" flexGrow={1}>
-          {treePanel}
-        </Box>
-        <Box
-          flexDirection="column"
-          flexGrow={1}
-          borderStyle="single"
-          borderLeft={true}
-          borderRight={false}
-          borderTop={false}
-          borderBottom={false}
-        >
-          <Text dimColor>$ {lastCmd}</Text>
-          <Text dimColor>{'─'.repeat(20)}</Text>
-          {visibleOutput.map((line, i) => (
-            <Text key={i}>{line}</Text>
-          ))}
-          {canScroll && (
-            <Text dimColor>[[] ] or Shift+↑↓ to scroll</Text>
-          )}
-        </Box>
-      </Box>
-    );
-  }
-
   return (
     <Box flexDirection="column">
       {treePanel}
+      {hasHistory && (
+        <>
+          <Text dimColor>{sep}</Text>
+          <Box flexDirection="column" height={HISTORY_PANEL_HEIGHT}>
+            {historyLog.slice(historyScroll, historyScroll + HISTORY_PANEL_HEIGHT).map((line, i) => (
+              <Text key={i} dimColor={line.startsWith('$ ')}>{line}</Text>
+            ))}
+          </Box>
+        </>
+      )}
     </Box>
   );
 }
