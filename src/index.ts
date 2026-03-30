@@ -2,7 +2,7 @@
 import React from 'react';
 import { render } from 'ink';
 import { program } from 'commander';
-import { spawnSync } from 'child_process';
+import { spawn } from 'child_process';
 import chalk from 'chalk';
 import App, { HistoryEntry } from './App.js';
 
@@ -48,10 +48,13 @@ async function main() {
 
     if (pendingCmd) {
       // Ink has already restored the terminal — run the command in the normal shell
-      const result = spawnSync(pendingCmd, { shell: true, stdio: 'inherit' });
+      const exitCode = await new Promise<number>((resolve) => {
+        const child = spawn(pendingCmd!, { shell: true, stdio: 'inherit' });
+        child.on('close', (code) => resolve(code ?? 1));
+      });
       history.push({ cmd: pendingCmd, lines: [] });
-      if (result.status !== 0) {
-        console.log(chalk.red(`\n✗ Command failed (exit ${result.status})`));
+      if (exitCode !== 0) {
+        console.log(chalk.red(`\n✗ Command failed (exit ${exitCode})`));
       } else {
         console.log(chalk.green('\n✓ Done'));
       }
