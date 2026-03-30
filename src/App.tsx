@@ -23,7 +23,7 @@ interface Props {
   outputLines?: string[];
 }
 
-type Mode = 'nav' | 'prefix' | 'suffix';
+type Mode = 'nav' | 'cmd';
 
 const BANNER = [
   ' ____   ___  _   _ _____',
@@ -52,9 +52,8 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
     cols: process.stdout.columns ?? 80,
   });
   const [mode, setMode] = useState<Mode>('nav');
-  const [prefix, setPrefix] = useState('');
-  const [suffix, setSuffix] = useState('');
-  const [fileToggled, setFileToggled] = useState(false);
+  const [cmdText, setCmdText] = useState('');
+  const [cmdCursor, setCmdCursor] = useState(0);
   const [gitMap, setGitMap] = useState<Map<string, GitStatus>>(new Map());
   const [showHelp, setShowHelp] = useState(false);
   const lastGPress = useRef<number>(0);
@@ -119,8 +118,7 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
   }
 
   function doRun() {
-    const file = fileToggled && selectedNode ? selectedNode.path : '';
-    const cmd = [prefix, file, suffix].filter(Boolean).join(' ').trim();
+    const cmd = cmdText.trim();
     if (!cmd) return;
     onCommand(cmd);
     exit();
@@ -128,9 +126,12 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
 
   function resetBar() {
     setMode('nav');
-    setPrefix('');
-    setSuffix('');
-    setFileToggled(false);
+    setCmdText('');
+    setCmdCursor(0);
+  }
+
+  function insertAtCursor(text: string, cur: string, pos: number): string {
+    return cur.slice(0, pos) + text + cur.slice(pos);
   }
 
   useInput((input, key) => {
@@ -162,20 +163,40 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
       }
 
       else if (input === 'q' && !key.ctrl && !key.meta) exit();
-      else if (input.length === 1 && !key.ctrl && !key.meta && input !== ' ') {
-        setMode('prefix');
-        setPrefix(input);
+      else if (key.tab) {
+        const insertion = selectedNode ? selectedNode.path + ' ' : '';
+        setCmdText(insertion);
+        setCmdCursor(insertion.length);
+        setMode('cmd');
+      } else if (input.length === 1 && !key.ctrl && !key.meta && input !== ' ') {
+        setCmdText(input);
+        setCmdCursor(1);
+        setMode('cmd');
       }
-    } else if (mode === 'prefix') {
-      if (key.escape) resetBar();
-      else if (key.return) doRun();
-      else if (key.tab) { setFileToggled(t => !t); setMode('suffix'); }
-      else setPrefix(p => editText(p, input, key));
     } else {
-      if (key.escape) resetBar();
-      else if (key.return) doRun();
-      else if (key.tab) setFileToggled(t => !t);
-      else setSuffix(s => editText(s, input, key));
+      if (key.escape) {
+        resetBar();
+      } else if (key.return) {
+        doRun();
+      } else if (key.tab) {
+        if (selectedNode) {
+          const insertion = selectedNode.path;
+          setCmdText(prev => insertAtCursor(insertion, prev, cmdCursor));
+          setCmdCursor(pos => pos + insertion.length);
+        }
+      } else if (key.leftArrow) {
+        setCmdCursor(pos => Math.max(0, pos - 1));
+      } else if (key.rightArrow) {
+        setCmdCursor(pos => Math.min(cmdText.length, pos + 1));
+      } else if (key.backspace || key.delete) {
+        if (cmdCursor > 0) {
+          setCmdText(prev => prev.slice(0, cmdCursor - 1) + prev.slice(cmdCursor));
+          setCmdCursor(pos => pos - 1);
+        }
+      } else if (input && !key.ctrl && !key.meta) {
+        setCmdText(prev => insertAtCursor(input, prev, cmdCursor));
+        setCmdCursor(pos => pos + input.length);
+      }
     }
   });
 
@@ -236,19 +257,11 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
         <Text dimColor>  ↑↓ move  ←→ fold  [type] run  q quit{hasOutput ? '  [[] ] scroll output' : ''}</Text>
       ) : (
         <Box>
-          <Text color={mode === 'prefix' ? 'cyan' : undefined}>{prefix}</Text>
-          <Text> </Text>
-          <Text
-            color={fileToggled ? 'blue' : undefined}
-            bold={fileToggled}
-            dimColor={!fileToggled}
-          >
-            {selectedNode?.name ?? ''}
-          </Text>
-          <Text> </Text>
-          <Text color={mode === 'suffix' ? 'cyan' : undefined}>{suffix}</Text>
-          <Text color="cyan">▌</Text>
-          <Text dimColor>   [Tab] toggle file  [↵] run  [Esc] cancel</Text>
+          <Text color="cyan">{`> `}</Text>
+          <Text>{cmdText.slice(0, cmdCursor)}</Text>
+          <Text inverse>{cmdText[cmdCursor] ?? ' '}</Text>
+          <Text>{cmdText.slice(cmdCursor + 1)}</Text>
+          <Text dimColor>   [Tab] insert file  [↵] run  [Esc] cancel</Text>
         </Box>
       )}
     </>
