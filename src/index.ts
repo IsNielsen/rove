@@ -2,6 +2,10 @@
 import React from 'react';
 import { render } from 'ink';
 import { program } from 'commander';
+import { execSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 import { spawnSync } from 'child_process';
 import chalk from 'chalk';
 import App from './App.js';
@@ -15,10 +19,22 @@ program
   .parse();
 
 const opts = program.opts();
+
+const configPath = path.join(os.homedir(), '.rove', 'config.json');
+let hasSeenWelcome = false;
+try {
+  const raw = fs.readFileSync(configPath, 'utf8');
+  const config = JSON.parse(raw) as Record<string, unknown>;
+  hasSeenWelcome = config['hasSeenWelcome'] === true;
+} catch {
+  // config doesn't exist yet — show welcome
+}
+
 const props = {
   cwd: process.cwd(),
   gitMode: Boolean(opts['git']),
   maxDepth: parseInt(opts['depth'] as string, 10),
+  showWelcome: !hasSeenWelcome,
 };
 
 async function main() {
