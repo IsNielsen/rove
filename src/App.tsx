@@ -374,7 +374,7 @@ export default function App({ cwd: initialCwd, gitMode, maxDepth, onCommand, onC
       {mode === 'nav' && filterQuery ? (
         <Text dimColor>  [/] filter: {filterQuery}  ↑↓ move  ←→ fold  [/] re-filter  q quit</Text>
       ) : mode === 'nav' ? (
-        <Text dimColor>  ↑↓ move  ←→ fold  [:] cmd  q quit{hasHistory ? '  [[] ] scroll history' : ''}</Text>
+        <Text dimColor>  ↑↓ move | ←→ fold | [:] cmd | q quit | ? help{hasHistory ? '  [[] ] scroll history' : ''}</Text>
       ) : mode === 'filter' ? (
         <Box>
           <Text color="cyan">/ {filterQuery}█</Text>
