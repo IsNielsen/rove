@@ -87,8 +87,9 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
 
   useEffect(() => {
     if (!gitMode) return;
-    const id = setTimeout(() => setGitMap(getGitStatuses(cwd)), 0);
-    return () => clearTimeout(id);
+    setGitMap(getGitStatuses(cwd));
+    const id = setInterval(() => setGitMap(getGitStatuses(cwd)), 30_000);
+    return () => clearInterval(id);
   }, []);
 
   useEffect(() => {
@@ -202,6 +203,7 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
         }
       }
 
+      else if (input === 'r' && !key.ctrl && !key.meta && gitMode) setGitMap(getGitStatuses(cwd));
       else if (input === 'q' && !key.ctrl && !key.meta) exit();
       else if (input === '/' && !key.ctrl && !key.meta) setMode('filter');
       else if (key.tab) {
@@ -272,6 +274,7 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
         <KeyBinding keys={['Enter']} description="Run command" />
         <KeyBinding keys={['Esc']} description="Cancel / back" />
         <KeyBinding keys={['?']} description="Toggle this help" />
+        {gitMode && <KeyBinding keys={['r']} description="Refresh git status" />}
         <KeyBinding keys={['q']} description="Quit" />
         <Text> </Text>
         <Text dimColor>Press any key to close</Text>
