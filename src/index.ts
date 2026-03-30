@@ -2,7 +2,8 @@
 import React from 'react';
 import { render } from 'ink';
 import { program } from 'commander';
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
+import chalk from 'chalk';
 import App from './App.js';
 
 program
@@ -36,11 +37,16 @@ async function main() {
 
     if (pendingCmd) {
       // Ink has already restored the terminal — run the command in the normal shell
-      try {
-        execSync(pendingCmd, { stdio: 'inherit', shell: '/bin/sh' });
-      } catch {
-        // command exited non-zero; still re-render rove
+      const result = spawnSync(pendingCmd, { shell: true, stdio: ['inherit', 'pipe', 'pipe'] });
+      if (result.stdout) process.stdout.write(result.stdout);
+      if (result.status !== 0) {
+        const stderr = result.stderr?.toString().trim().slice(0, 200) ?? '';
+        console.log(chalk.red(`\n✗ Command failed (exit ${result.status})`));
+        if (stderr) console.log(chalk.dim(stderr));
+      } else {
+        console.log(chalk.green('\n✓ Done'));
       }
+      console.log();
       // Loop continues → render() called again → back in rove
     } else {
       // User pressed q or Ctrl+C → exit
