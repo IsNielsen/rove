@@ -1,8 +1,16 @@
 {
-  "name": "rove",
+  "name": "rove-tui",
   "version": "0.1.0",
+  "description": "Interactive TUI file explorer",
   "type": "module",
   "author": "Isaac Nielsen <isnielsen13@gmail.com>",
+  "license": "MIT",
+  "files": [
+    "dist/"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "bin": {
     "rove": "./dist/index.js"
   },
