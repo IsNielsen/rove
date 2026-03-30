@@ -23,7 +23,7 @@ interface Props {
   outputLines?: string[];
 }
 
-type Mode = 'nav' | 'cmd';
+type Mode = 'nav' | 'cmd' | 'filter';
 
 const BANNER = [
   ' ____   ___  _   _ _____',
@@ -57,6 +57,7 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
   const [gitMap, setGitMap] = useState<Map<string, GitStatus>>(new Map());
   const [showHelp, setShowHelp] = useState(false);
   const lastGPress = useRef<number>(0);
+  const [filterQuery, setFilterQuery] = useState('');
   const [outputScroll, setOutputScroll] = useState(0);
 
   const treeHeight = Math.max(1, termSize.rows - 2 - (showBanner ? BANNER.length : 0));
@@ -75,24 +76,44 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
     return () => clearTimeout(id);
   }, []);
 
+  const visibleNodes = useMemo(() => {
+    if (!filterQuery) return nodes;
+    const q = filterQuery.toLowerCase();
+    const matchingPaths = new Set<string>();
+    for (const node of nodes) {
+      if (node.name.toLowerCase().includes(q) || node.path.toLowerCase().includes(q)) {
+        matchingPaths.add(node.path);
+        let p = node.path;
+        while (true) {
+          const slash = p.lastIndexOf('/');
+          if (slash <= 0) break;
+          p = p.slice(0, slash);
+          matchingPaths.add(p);
+        }
+      }
+    }
+    return nodes.filter(n => matchingPaths.has(n.path));
+  }, [nodes, filterQuery]);
+
   const windowedNodes = useMemo(
-    () => nodes.slice(nav.offset, nav.offset + treeHeight),
-    [nodes, nav.offset, treeHeight]
+    () => visibleNodes.slice(nav.offset, nav.offset + treeHeight),
+    [visibleNodes, nav.offset, treeHeight]
   );
 
   const sep = useMemo(() => '─'.repeat(termSize.cols), [termSize.cols]);
 
-  const selectedNode = nodes[nav.cursor];
+  const selectedNode = visibleNodes[nav.cursor];
 
   function moveCursor(next: number) {
+    const len = visibleNodes.length;
     setNav(({ cursor: _c, offset }) => {
-      const c = Math.max(0, Math.min(next, nodes.length - 1));
+      const c = Math.max(0, Math.min(next, len - 1));
       const buffer = 5;
       let o = offset;
       if (c < offset + buffer) {
         o = Math.max(0, c - buffer);
       } else if (c >= offset + treeHeight - buffer) {
-        o = Math.min(Math.max(0, nodes.length - treeHeight), c - treeHeight + buffer + 1);
+        o = Math.min(Math.max(0, len - treeHeight), c - treeHeight + buffer + 1);
       }
       return { cursor: c, offset: o };
     });
@@ -163,6 +184,7 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
       }
 
       else if (input === 'q' && !key.ctrl && !key.meta) exit();
+      else if (input === '/' && !key.ctrl && !key.meta) setMode('filter');
       else if (key.tab) {
         const insertion = selectedNode ? selectedNode.path + ' ' : '';
         setCmdText(insertion);
@@ -172,6 +194,20 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
         setCmdText(input);
         setCmdCursor(1);
         setMode('cmd');
+      }
+    } else if (mode === 'filter') {
+      if (key.escape) {
+        setFilterQuery('');
+        setMode('nav');
+        setNav({ cursor: 0, offset: 0 });
+      } else if (key.return) {
+        setMode('nav');
+      } else {
+        const next = editText(filterQuery, input, key);
+        if (next !== filterQuery) {
+          setFilterQuery(next);
+          setNav({ cursor: 0, offset: 0 });
+        }
       }
     } else {
       if (key.escape) {
@@ -253,8 +289,15 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
 
       <Text dimColor>{sep}</Text>
 
-      {mode === 'nav' ? (
+      {mode === 'nav' && filterQuery ? (
+        <Text dimColor>  [/] filter: {filterQuery}  ↑↓ move  ←→ fold  [/] re-filter  q quit</Text>
+      ) : mode === 'nav' ? (
         <Text dimColor>  ↑↓ move  ←→ fold  [type] run  q quit{hasOutput ? '  [[] ] scroll output' : ''}</Text>
+      ) : mode === 'filter' ? (
+        <Box>
+          <Text color="cyan">/ {filterQuery}█</Text>
+          <Text dimColor>   [↵] confirm  [Esc] clear + exit</Text>
+        </Box>
       ) : (
         <Box>
           <Text color="cyan">{`> `}</Text>
