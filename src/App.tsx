@@ -209,9 +209,9 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
         setCmdText(insertion);
         setCmdCursor(insertion.length);
         setMode('cmd');
-      } else if (input.length === 1 && !key.ctrl && !key.meta && input !== ' ') {
-        setCmdText(input);
-        setCmdCursor(1);
+      } else if (input === ':' && !key.ctrl && !key.meta) {
+        setCmdText('');
+        setCmdCursor(0);
         setMode('cmd');
       }
     } else if (mode === 'filter') {
@@ -267,7 +267,8 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
         <KeyBinding keys={['gg']} description="Jump to top" />
         <KeyBinding keys={['G']} description="Jump to bottom" />
         <KeyBinding keys={['/']} description="Filter files" />
-        <KeyBinding keys={['Tab']} description="Insert filename" />
+        <KeyBinding keys={[':']} description="Open command bar" />
+        <KeyBinding keys={['Tab']} description="Insert filename into command bar" />
         <KeyBinding keys={['Enter']} description="Run command" />
         <KeyBinding keys={['Esc']} description="Cancel / back" />
         <KeyBinding keys={['?']} description="Toggle this help" />
@@ -311,7 +312,7 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
       {mode === 'nav' && filterQuery ? (
         <Text dimColor>  [/] filter: {filterQuery}  ↑↓ move  ←→ fold  [/] re-filter  q quit</Text>
       ) : mode === 'nav' ? (
-        <Text dimColor>  ↑↓ move  ←→ fold  [type] run  q quit{hasHistory ? '  [[] ] scroll history' : ''}</Text>
+        <Text dimColor>  ↑↓ move  ←→ fold  [:] cmd  q quit{hasHistory ? '  [[] ] scroll history' : ''}</Text>
       ) : mode === 'filter' ? (
         <Box>
           <Text color="cyan">/ {filterQuery}█</Text>
