@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
 import type { Key } from 'ink';
 import { readChildren, insertAfter, removeDescendants, FileNode } from './utils/files.js';
@@ -18,9 +18,19 @@ interface Props {
   gitMode: boolean;
   maxDepth: number;
   onCommand: (cmd: string) => void;
+  showBanner?: boolean;
 }
 
 type Mode = 'nav' | 'prefix' | 'suffix';
+
+const BANNER = [
+  ' ____   ___  _   _ _____',
+  '|  _ \\ / _ \\| | | | ____|',
+  '| |_) | | | | | | |  _|',
+  '|  _ <| |_| \\ \\_/ / |___',
+  '|_| \\_\\\\___/ \\___/|_____|',
+  '   EXPLORE THE CONTEXT',
+];
 
 function editText(prev: string, input: string, key: Key): string {
   if (key.backspace || key.delete) return prev.slice(0, -1);
@@ -28,7 +38,7 @@ function editText(prev: string, input: string, key: Key): string {
   return prev;
 }
 
-export default function App({ cwd, gitMode, maxDepth, onCommand }: Props) {
+export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = true }: Props) {
   const { exit } = useApp();
 
   const [nodes, setNodes] = useState<FileNode[]>(() => readChildren(cwd, 0));
@@ -45,8 +55,9 @@ export default function App({ cwd, gitMode, maxDepth, onCommand }: Props) {
   const [fileToggled, setFileToggled] = useState(false);
   const [gitMap, setGitMap] = useState<Map<string, GitStatus>>(new Map());
   const [showHelp, setShowHelp] = useState(false);
+  const lastGPress = useRef<number>(0);
 
-  const treeHeight = Math.max(1, termSize.rows - 2);
+  const treeHeight = Math.max(1, termSize.rows - 2 - (showBanner ? BANNER.length : 0));
 
   useEffect(() => {
     const onResize = () =>
@@ -124,11 +135,23 @@ export default function App({ cwd, gitMode, maxDepth, onCommand }: Props) {
       return;
     }
     if (mode === 'nav') {
+
       if (input === '?' && !key.ctrl && !key.meta) { setShowHelp(true); return; }
-      if (key.upArrow) moveCursor(nav.cursor - 1);
-      else if (key.downArrow) moveCursor(nav.cursor + 1);
-      else if (key.leftArrow && selectedNode?.isDir) doCollapse(selectedNode);
-      else if (key.rightArrow && selectedNode?.isDir) doExpand(selectedNode);
+      else if (key.upArrow || (input === 'k' && !key.ctrl && !key.meta)) moveCursor(nav.cursor - 1);
+      else if (key.downArrow || (input === 'j' && !key.ctrl && !key.meta)) moveCursor(nav.cursor + 1);
+      else if ((key.leftArrow || (input === 'h' && !key.ctrl && !key.meta)) && selectedNode?.isDir) doCollapse(selectedNode);
+      else if ((key.rightArrow || (input === 'l' && !key.ctrl && !key.meta)) && selectedNode?.isDir) doExpand(selectedNode);
+      else if (input === 'G' && !key.ctrl && !key.meta) moveCursor(nodes.length - 1);
+      else if (input === 'g' && !key.ctrl && !key.meta) {
+        const now = Date.now();
+        if (now - lastGPress.current <= 500) {
+          moveCursor(0);
+          lastGPress.current = 0;
+        } else {
+          lastGPress.current = now;
+        }
+      }
+
       else if (input === 'q' && !key.ctrl && !key.meta) exit();
       else if (input.length === 1 && !key.ctrl && !key.meta && input !== ' ') {
         setMode('prefix');
@@ -172,6 +195,9 @@ export default function App({ cwd, gitMode, maxDepth, onCommand }: Props) {
 
   return (
     <Box flexDirection="column">
+      {showBanner && BANNER.map((line, i) => (
+        <Text key={i} dimColor>{line}</Text>
+      ))}
       {windowedNodes.map((node, i) => {
         const isActive = i + nav.offset === nav.cursor;
         const gitStatus = gitMap.get(node.path);
