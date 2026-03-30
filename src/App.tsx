@@ -9,6 +9,7 @@ interface Props {
   gitMode: boolean;
   maxDepth: number;
   onCommand: (cmd: string) => void;
+  showBanner?: boolean;
 }
 
 type Mode = 'nav' | 'prefix' | 'suffix';
@@ -28,7 +29,7 @@ function editText(prev: string, input: string, key: Key): string {
   return prev;
 }
 
-export default function App({ cwd, gitMode, maxDepth, onCommand }: Props) {
+export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = true }: Props) {
   const { exit } = useApp();
 
   const [nodes, setNodes] = useState<FileNode[]>(() => readChildren(cwd, 0));
@@ -45,7 +46,7 @@ export default function App({ cwd, gitMode, maxDepth, onCommand }: Props) {
   const [fileToggled, setFileToggled] = useState(false);
   const [gitMap, setGitMap] = useState<Map<string, GitStatus>>(new Map());
 
-  const treeHeight = Math.max(1, termSize.rows - 2 - BANNER.length);
+  const treeHeight = Math.max(1, termSize.rows - 2 - (showBanner ? BANNER.length : 0));
 
   useEffect(() => {
     const onResize = () =>
@@ -143,7 +144,7 @@ export default function App({ cwd, gitMode, maxDepth, onCommand }: Props) {
 
   return (
     <Box flexDirection="column">
-      {BANNER.map((line, i) => (
+      {showBanner && BANNER.map((line, i) => (
         <Text key={i} dimColor>{line}</Text>
       ))}
       {windowedNodes.map((node, i) => {
