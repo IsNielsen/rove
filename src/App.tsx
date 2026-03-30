@@ -19,6 +19,8 @@ interface Props {
   maxDepth: number;
   onCommand: (cmd: string) => void;
   showBanner?: boolean;
+  lastCmd?: string;
+  outputLines?: string[];
 }
 
 type Mode = 'nav' | 'prefix' | 'suffix';
@@ -38,7 +40,7 @@ function editText(prev: string, input: string, key: Key): string {
   return prev;
 }
 
-export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = true }: Props) {
+export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = true, lastCmd = '', outputLines = [] }: Props) {
   const { exit } = useApp();
 
   const [nodes, setNodes] = useState<FileNode[]>(() => readChildren(cwd, 0));
@@ -56,8 +58,10 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
   const [gitMap, setGitMap] = useState<Map<string, GitStatus>>(new Map());
   const [showHelp, setShowHelp] = useState(false);
   const lastGPress = useRef<number>(0);
+  const [outputScroll, setOutputScroll] = useState(0);
 
   const treeHeight = Math.max(1, termSize.rows - 2 - (showBanner ? BANNER.length : 0));
+  const hasOutput = outputLines.length > 0 && outputLines.some(l => l.length > 0);
 
   useEffect(() => {
     const onResize = () =>
@@ -137,7 +141,12 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
     if (mode === 'nav') {
 
       if (input === '?' && !key.ctrl && !key.meta) { setShowHelp(true); return; }
-      else if (key.upArrow || (input === 'k' && !key.ctrl && !key.meta)) moveCursor(nav.cursor - 1);
+      const maxScroll = Math.max(0, outputLines.length - treeHeight + 2);
+      if (((key.upArrow && key.shift) || input === '[') && hasOutput) {
+        setOutputScroll(s => Math.max(0, s - 1));
+      } else if (((key.downArrow && key.shift) || input === ']') && hasOutput) {
+        setOutputScroll(s => Math.min(maxScroll, s + 1));
+      } else if (key.upArrow || (input === 'k' && !key.ctrl && !key.meta)) moveCursor(nav.cursor - 1);
       else if (key.downArrow || (input === 'j' && !key.ctrl && !key.meta)) moveCursor(nav.cursor + 1);
       else if ((key.leftArrow || (input === 'h' && !key.ctrl && !key.meta)) && selectedNode?.isDir) doCollapse(selectedNode);
       else if ((key.rightArrow || (input === 'l' && !key.ctrl && !key.meta)) && selectedNode?.isDir) doExpand(selectedNode);
@@ -193,8 +202,8 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
     );
   }
 
-  return (
-    <Box flexDirection="column">
+  const treePanel = (
+    <>
       {showBanner && BANNER.map((line, i) => (
         <Text key={i} dimColor>{line}</Text>
       ))}
@@ -224,7 +233,7 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
       <Text dimColor>{sep}</Text>
 
       {mode === 'nav' ? (
-        <Text dimColor>  ↑↓ move  ←→ fold  [type] run  q quit</Text>
+        <Text dimColor>  ↑↓ move  ←→ fold  [type] run  q quit{hasOutput ? '  [[] ] scroll output' : ''}</Text>
       ) : (
         <Box>
           <Text color={mode === 'prefix' ? 'cyan' : undefined}>{prefix}</Text>
@@ -242,6 +251,44 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
           <Text dimColor>   [Tab] toggle file  [↵] run  [Esc] cancel</Text>
         </Box>
       )}
+    </>
+  );
+
+  if (hasOutput) {
+    const panelLines = treeHeight - 2;
+    const visibleOutput = outputLines.slice(outputScroll, outputScroll + panelLines);
+    const canScroll = outputLines.length > panelLines;
+
+    return (
+      <Box flexDirection="row">
+        <Box flexDirection="column" flexGrow={1}>
+          {treePanel}
+        </Box>
+        <Box
+          flexDirection="column"
+          flexGrow={1}
+          borderStyle="single"
+          borderLeft={true}
+          borderRight={false}
+          borderTop={false}
+          borderBottom={false}
+        >
+          <Text dimColor>$ {lastCmd}</Text>
+          <Text dimColor>{'─'.repeat(20)}</Text>
+          {visibleOutput.map((line, i) => (
+            <Text key={i}>{line}</Text>
+          ))}
+          {canScroll && (
+            <Text dimColor>[[] ] or Shift+↑↓ to scroll</Text>
+          )}
+        </Box>
+      </Box>
+    );
+  }
+
+  return (
+    <Box flexDirection="column">
+      {treePanel}
     </Box>
   );
 }
