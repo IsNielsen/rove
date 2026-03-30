@@ -30,7 +30,7 @@ _TODO: Add a GIF or screenshot here._
 ## Install
 
 ```bash
-npm install -g rove
+npm install -g rove-tui
 ```
 
 Or build from source:
