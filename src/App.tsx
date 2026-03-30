@@ -65,6 +65,8 @@ export default function App({ cwd: initialCwd, gitMode, maxDepth, onCommand, onC
   const lastGPress = useRef<number>(0);
   const [filterQuery, setFilterQuery] = useState('');
   const [historyScroll, setHistoryScroll] = useState(0);
+  const [historyIdx, setHistoryIdx] = useState(-1);
+  const cmdDraft = useRef('');
 
   const HISTORY_PANEL_HEIGHT = 8;
 
@@ -224,10 +226,12 @@ export default function App({ cwd: initialCwd, gitMode, maxDepth, onCommand, onC
         const insertion = selectedNode ? selectedNode.path + ' ' : '';
         setCmdText(insertion);
         setCmdCursor(insertion.length);
+        setHistoryIdx(-1);
         setMode('cmd');
       } else if (input === ':' && !key.ctrl && !key.meta) {
         setCmdText('');
         setCmdCursor(0);
+        setHistoryIdx(-1);
         setMode('cmd');
       }
     } else if (mode === 'filter') {
@@ -255,6 +259,30 @@ export default function App({ cwd: initialCwd, gitMode, maxDepth, onCommand, onC
           setCmdText(prev => insertAtCursor(insertion, prev, cmdCursor));
           setCmdCursor(pos => pos + insertion.length);
         }
+      } else if (key.upArrow) {
+        const cmds = history.map(e => e.cmd);
+        if (cmds.length === 0) return;
+        if (historyIdx === -1) {
+          cmdDraft.current = cmdText;
+        }
+        const next = Math.min(historyIdx + 1, cmds.length - 1);
+        setHistoryIdx(next);
+        const recalled = cmds[cmds.length - 1 - next];
+        setCmdText(recalled);
+        setCmdCursor(recalled.length);
+      } else if (key.downArrow) {
+        if (historyIdx === -1) return;
+        const next = historyIdx - 1;
+        setHistoryIdx(next);
+        if (next === -1) {
+          setCmdText(cmdDraft.current);
+          setCmdCursor(cmdDraft.current.length);
+        } else {
+          const cmds = history.map(e => e.cmd);
+          const recalled = cmds[cmds.length - 1 - next];
+          setCmdText(recalled);
+          setCmdCursor(recalled.length);
+        }
       } else if (key.leftArrow) {
         setCmdCursor(pos => Math.max(0, pos - 1));
       } else if (key.rightArrow) {
@@ -279,6 +307,7 @@ export default function App({ cwd: initialCwd, gitMode, maxDepth, onCommand, onC
         setCmdText(trimmed.slice(0, newPos) + cmdText.slice(cmdCursor));
         setCmdCursor(newPos);
       } else if (input && !key.ctrl && !key.meta) {
+        setHistoryIdx(-1);
         setCmdText(prev => insertAtCursor(input, prev, cmdCursor));
         setCmdCursor(pos => pos + input.length);
       }
