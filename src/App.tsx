@@ -264,6 +264,20 @@ export default function App({ cwd: initialCwd, gitMode, maxDepth, onCommand, onC
           setCmdText(prev => prev.slice(0, cmdCursor - 1) + prev.slice(cmdCursor));
           setCmdCursor(pos => pos - 1);
         }
+      } else if (key.ctrl && input === 'a') {
+        setCmdCursor(0);
+      } else if (key.ctrl && input === 'e') {
+        setCmdCursor(cmdText.length);
+      } else if (key.ctrl && input === 'u') {
+        setCmdText('');
+        setCmdCursor(0);
+      } else if (key.ctrl && input === 'w') {
+        const before = cmdText.slice(0, cmdCursor);
+        const trimmed = before.trimEnd();
+        const lastSpace = trimmed.lastIndexOf(' ');
+        const newPos = lastSpace === -1 ? 0 : lastSpace + 1;
+        setCmdText(trimmed.slice(0, newPos) + cmdText.slice(cmdCursor));
+        setCmdCursor(newPos);
       } else if (input && !key.ctrl && !key.meta) {
         setCmdText(prev => insertAtCursor(input, prev, cmdCursor));
         setCmdCursor(pos => pos + input.length);
