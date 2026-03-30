@@ -171,6 +171,7 @@ export default function App({ cwd, gitMode, maxDepth, showWelcome, onCommand, sh
       } catch {
         // best-effort write
       }
+    }
     if (showHelp) {
       setShowHelp(false);
       return;
@@ -267,6 +268,7 @@ export default function App({ cwd, gitMode, maxDepth, showWelcome, onCommand, sh
           <Text>Press any key to start</Text>
           <Text> </Text>
         </Box>
+      </Box>
   if (showHelp) {
     return (
       <Box borderStyle="round" padding={1} flexDirection="column">
