@@ -4,6 +4,15 @@ import type { Key } from 'ink';
 import { readChildren, insertAfter, removeDescendants, FileNode } from './utils/files.js';
 import { getGitStatuses, GitStatus } from './utils/git.js';
 
+const KeyBinding = ({ keys, description }: { keys: string[], description: string }) => (
+  <Box gap={2}>
+    <Box width={16}>
+      {keys.map(k => <Text key={k} color="cyan" bold>[{k}]</Text>)}
+    </Box>
+    <Text dimColor>{description}</Text>
+  </Box>
+);
+
 interface Props {
   cwd: string;
   gitMode: boolean;
@@ -45,6 +54,7 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
   const [suffix, setSuffix] = useState('');
   const [fileToggled, setFileToggled] = useState(false);
   const [gitMap, setGitMap] = useState<Map<string, GitStatus>>(new Map());
+  const [showHelp, setShowHelp] = useState(false);
   const lastGPress = useRef<number>(0);
 
   const treeHeight = Math.max(1, termSize.rows - 2 - (showBanner ? BANNER.length : 0));
@@ -120,8 +130,14 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
   }
 
   useInput((input, key) => {
+    if (showHelp) {
+      setShowHelp(false);
+      return;
+    }
     if (mode === 'nav') {
-      if (key.upArrow || (input === 'k' && !key.ctrl && !key.meta)) moveCursor(nav.cursor - 1);
+
+      if (input === '?' && !key.ctrl && !key.meta) { setShowHelp(true); return; }
+      else if (key.upArrow || (input === 'k' && !key.ctrl && !key.meta)) moveCursor(nav.cursor - 1);
       else if (key.downArrow || (input === 'j' && !key.ctrl && !key.meta)) moveCursor(nav.cursor + 1);
       else if ((key.leftArrow || (input === 'h' && !key.ctrl && !key.meta)) && selectedNode?.isDir) doCollapse(selectedNode);
       else if ((key.rightArrow || (input === 'l' && !key.ctrl && !key.meta)) && selectedNode?.isDir) doExpand(selectedNode);
@@ -135,6 +151,7 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
           lastGPress.current = now;
         }
       }
+
       else if (input === 'q' && !key.ctrl && !key.meta) exit();
       else if (input.length === 1 && !key.ctrl && !key.meta && input !== ' ') {
         setMode('prefix');
@@ -152,6 +169,29 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
       else setSuffix(s => editText(s, input, key));
     }
   });
+
+  if (showHelp) {
+    return (
+      <Box borderStyle="round" padding={1} flexDirection="column">
+        <Text bold>Keybindings</Text>
+        <Text> </Text>
+        <KeyBinding keys={['↑', 'k']} description="Move up" />
+        <KeyBinding keys={['↓', 'j']} description="Move down" />
+        <KeyBinding keys={['→', 'l']} description="Expand directory" />
+        <KeyBinding keys={['←', 'h']} description="Collapse directory" />
+        <KeyBinding keys={['gg']} description="Jump to top" />
+        <KeyBinding keys={['G']} description="Jump to bottom" />
+        <KeyBinding keys={['/']} description="Filter files" />
+        <KeyBinding keys={['Tab']} description="Insert filename" />
+        <KeyBinding keys={['Enter']} description="Run command" />
+        <KeyBinding keys={['Esc']} description="Cancel / back" />
+        <KeyBinding keys={['?']} description="Toggle this help" />
+        <KeyBinding keys={['q']} description="Quit" />
+        <Text> </Text>
+        <Text dimColor>Press any key to close</Text>
+      </Box>
+    );
+  }
 
   return (
     <Box flexDirection="column">
