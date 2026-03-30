@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
 import type { Key } from 'ink';
 import { readChildren, insertAfter, removeDescendants, FileNode } from './utils/files.js';
@@ -45,6 +45,7 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
   const [suffix, setSuffix] = useState('');
   const [fileToggled, setFileToggled] = useState(false);
   const [gitMap, setGitMap] = useState<Map<string, GitStatus>>(new Map());
+  const lastGPress = useRef<number>(0);
 
   const treeHeight = Math.max(1, termSize.rows - 2 - (showBanner ? BANNER.length : 0));
 
@@ -120,10 +121,20 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
 
   useInput((input, key) => {
     if (mode === 'nav') {
-      if (key.upArrow) moveCursor(nav.cursor - 1);
-      else if (key.downArrow) moveCursor(nav.cursor + 1);
-      else if (key.leftArrow && selectedNode?.isDir) doCollapse(selectedNode);
-      else if (key.rightArrow && selectedNode?.isDir) doExpand(selectedNode);
+      if (key.upArrow || (input === 'k' && !key.ctrl && !key.meta)) moveCursor(nav.cursor - 1);
+      else if (key.downArrow || (input === 'j' && !key.ctrl && !key.meta)) moveCursor(nav.cursor + 1);
+      else if ((key.leftArrow || (input === 'h' && !key.ctrl && !key.meta)) && selectedNode?.isDir) doCollapse(selectedNode);
+      else if ((key.rightArrow || (input === 'l' && !key.ctrl && !key.meta)) && selectedNode?.isDir) doExpand(selectedNode);
+      else if (input === 'G' && !key.ctrl && !key.meta) moveCursor(nodes.length - 1);
+      else if (input === 'g' && !key.ctrl && !key.meta) {
+        const now = Date.now();
+        if (now - lastGPress.current <= 500) {
+          moveCursor(0);
+          lastGPress.current = 0;
+        } else {
+          lastGPress.current = now;
+        }
+      }
       else if (input === 'q' && !key.ctrl && !key.meta) exit();
       else if (input.length === 1 && !key.ctrl && !key.meta && input !== ' ') {
         setMode('prefix');
