@@ -9,9 +9,19 @@ interface Props {
   gitMode: boolean;
   maxDepth: number;
   onCommand: (cmd: string) => void;
+  showBanner?: boolean;
 }
 
 type Mode = 'nav' | 'prefix' | 'suffix';
+
+const BANNER = [
+  ' ____   ___  _   _ _____',
+  '|  _ \\ / _ \\| | | | ____|',
+  '| |_) | | | | | | |  _|',
+  '|  _ <| |_| \\ \\_/ / |___',
+  '|_| \\_\\\\___/ \\___/|_____|',
+  '   EXPLORE THE CONTEXT',
+];
 
 function editText(prev: string, input: string, key: Key): string {
   if (key.backspace || key.delete) return prev.slice(0, -1);
@@ -19,7 +29,7 @@ function editText(prev: string, input: string, key: Key): string {
   return prev;
 }
 
-export default function App({ cwd, gitMode, maxDepth, onCommand }: Props) {
+export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = true }: Props) {
   const { exit } = useApp();
 
   const [nodes, setNodes] = useState<FileNode[]>(() => readChildren(cwd, 0));
@@ -36,7 +46,7 @@ export default function App({ cwd, gitMode, maxDepth, onCommand }: Props) {
   const [fileToggled, setFileToggled] = useState(false);
   const [gitMap, setGitMap] = useState<Map<string, GitStatus>>(new Map());
 
-  const treeHeight = Math.max(1, termSize.rows - 2);
+  const treeHeight = Math.max(1, termSize.rows - 2 - (showBanner ? BANNER.length : 0));
 
   useEffect(() => {
     const onResize = () =>
@@ -134,6 +144,9 @@ export default function App({ cwd, gitMode, maxDepth, onCommand }: Props) {
 
   return (
     <Box flexDirection="column">
+      {showBanner && BANNER.map((line, i) => (
+        <Text key={i} dimColor>{line}</Text>
+      ))}
       {windowedNodes.map((node, i) => {
         const isActive = i + nav.offset === nav.cursor;
         const gitStatus = gitMap.get(node.path);

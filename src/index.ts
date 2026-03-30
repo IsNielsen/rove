@@ -10,6 +10,7 @@ program
   .description('Interactive TUI file explorer')
   .option('-g, --git', 'Show git status decorations')
   .option('-d, --depth <n>', 'Max folder depth', '3')
+  .option('--no-banner', 'Hide the ASCII art banner')
   .parse();
 
 const opts = program.opts();
@@ -20,12 +21,18 @@ const props = {
 };
 
 async function main() {
+  let firstRun = true;
+
   while (true) {
+    const rows = process.stdout.rows ?? 24;
+    process.stdout.write('\n'.repeat(rows) + `\x1B[${rows}A`);
+
     let pendingCmd: string | null = null;
 
     const { waitUntilExit } = render(
       React.createElement(App, {
         ...props,
+        showBanner: firstRun && Boolean(opts['banner']),
         onCommand: (cmd: string) => {
           pendingCmd = cmd;
         },
@@ -33,6 +40,7 @@ async function main() {
     );
 
     await waitUntilExit();
+    firstRun = false;
 
     if (pendingCmd) {
       // Ink has already restored the terminal — run the command in the normal shell
