@@ -25,9 +25,11 @@ interface Props {
   showWelcome: boolean;
   onCommand: (cmd: string) => void;
   showBanner?: boolean;
+  lastCmd?: string;
+  outputLines?: string[];
 }
 
-type Mode = 'nav' | 'prefix' | 'suffix';
+type Mode = 'nav' | 'cmd' | 'filter';
 
 const BANNER = [
   ' ____   ___  _   _ _____',
@@ -44,7 +46,7 @@ function editText(prev: string, input: string, key: Key): string {
   return prev;
 }
 
-export default function App({ cwd, gitMode, maxDepth, showWelcome, onCommand, showBanner = true }: Props) {
+export default function App({ cwd, gitMode, maxDepth, showWelcome, onCommand, showBanner = true, lastCmd = '', outputLines = [] }: Props) {
   const { exit } = useApp();
 
   const [welcomeVisible, setWelcomeVisible] = useState(showWelcome);
@@ -57,14 +59,16 @@ export default function App({ cwd, gitMode, maxDepth, showWelcome, onCommand, sh
     cols: process.stdout.columns ?? 80,
   });
   const [mode, setMode] = useState<Mode>('nav');
-  const [prefix, setPrefix] = useState('');
-  const [suffix, setSuffix] = useState('');
-  const [fileToggled, setFileToggled] = useState(false);
+  const [cmdText, setCmdText] = useState('');
+  const [cmdCursor, setCmdCursor] = useState(0);
   const [gitMap, setGitMap] = useState<Map<string, GitStatus>>(new Map());
   const [showHelp, setShowHelp] = useState(false);
   const lastGPress = useRef<number>(0);
+  const [filterQuery, setFilterQuery] = useState('');
+  const [outputScroll, setOutputScroll] = useState(0);
 
   const treeHeight = Math.max(1, termSize.rows - 2 - (showBanner ? BANNER.length : 0));
+  const hasOutput = outputLines.length > 0 && outputLines.some(l => l.length > 0);
 
   useEffect(() => {
     const onResize = () =>
@@ -79,24 +83,44 @@ export default function App({ cwd, gitMode, maxDepth, showWelcome, onCommand, sh
     return () => clearTimeout(id);
   }, []);
 
+  const visibleNodes = useMemo(() => {
+    if (!filterQuery) return nodes;
+    const q = filterQuery.toLowerCase();
+    const matchingPaths = new Set<string>();
+    for (const node of nodes) {
+      if (node.name.toLowerCase().includes(q) || node.path.toLowerCase().includes(q)) {
+        matchingPaths.add(node.path);
+        let p = node.path;
+        while (true) {
+          const slash = p.lastIndexOf('/');
+          if (slash <= 0) break;
+          p = p.slice(0, slash);
+          matchingPaths.add(p);
+        }
+      }
+    }
+    return nodes.filter(n => matchingPaths.has(n.path));
+  }, [nodes, filterQuery]);
+
   const windowedNodes = useMemo(
-    () => nodes.slice(nav.offset, nav.offset + treeHeight),
-    [nodes, nav.offset, treeHeight]
+    () => visibleNodes.slice(nav.offset, nav.offset + treeHeight),
+    [visibleNodes, nav.offset, treeHeight]
   );
 
   const sep = useMemo(() => '─'.repeat(termSize.cols), [termSize.cols]);
 
-  const selectedNode = nodes[nav.cursor];
+  const selectedNode = visibleNodes[nav.cursor];
 
   function moveCursor(next: number) {
+    const len = visibleNodes.length;
     setNav(({ cursor: _c, offset }) => {
-      const c = Math.max(0, Math.min(next, nodes.length - 1));
+      const c = Math.max(0, Math.min(next, len - 1));
       const buffer = 5;
       let o = offset;
       if (c < offset + buffer) {
         o = Math.max(0, c - buffer);
       } else if (c >= offset + treeHeight - buffer) {
-        o = Math.min(Math.max(0, nodes.length - treeHeight), c - treeHeight + buffer + 1);
+        o = Math.min(Math.max(0, len - treeHeight), c - treeHeight + buffer + 1);
       }
       return { cursor: c, offset: o };
     });
@@ -122,8 +146,7 @@ export default function App({ cwd, gitMode, maxDepth, showWelcome, onCommand, sh
   }
 
   function doRun() {
-    const file = fileToggled && selectedNode ? selectedNode.path : '';
-    const cmd = [prefix, file, suffix].filter(Boolean).join(' ').trim();
+    const cmd = cmdText.trim();
     if (!cmd) return;
     onCommand(cmd);
     exit();
@@ -131,9 +154,12 @@ export default function App({ cwd, gitMode, maxDepth, showWelcome, onCommand, sh
 
   function resetBar() {
     setMode('nav');
-    setPrefix('');
-    setSuffix('');
-    setFileToggled(false);
+    setCmdText('');
+    setCmdCursor(0);
+  }
+
+  function insertAtCursor(text: string, cur: string, pos: number): string {
+    return cur.slice(0, pos) + text + cur.slice(pos);
   }
 
   useInput((input, key) => {
@@ -152,7 +178,12 @@ export default function App({ cwd, gitMode, maxDepth, showWelcome, onCommand, sh
     if (mode === 'nav') {
 
       if (input === '?' && !key.ctrl && !key.meta) { setShowHelp(true); return; }
-      else if (key.upArrow || (input === 'k' && !key.ctrl && !key.meta)) moveCursor(nav.cursor - 1);
+      const maxScroll = Math.max(0, outputLines.length - treeHeight + 2);
+      if (((key.upArrow && key.shift) || input === '[') && hasOutput) {
+        setOutputScroll(s => Math.max(0, s - 1));
+      } else if (((key.downArrow && key.shift) || input === ']') && hasOutput) {
+        setOutputScroll(s => Math.min(maxScroll, s + 1));
+      } else if (key.upArrow || (input === 'k' && !key.ctrl && !key.meta)) moveCursor(nav.cursor - 1);
       else if (key.downArrow || (input === 'j' && !key.ctrl && !key.meta)) moveCursor(nav.cursor + 1);
       else if ((key.leftArrow || (input === 'h' && !key.ctrl && !key.meta)) && selectedNode?.isDir) doCollapse(selectedNode);
       else if ((key.rightArrow || (input === 'l' && !key.ctrl && !key.meta)) && selectedNode?.isDir) doExpand(selectedNode);
@@ -168,20 +199,55 @@ export default function App({ cwd, gitMode, maxDepth, showWelcome, onCommand, sh
       }
 
       else if (input === 'q' && !key.ctrl && !key.meta) exit();
-      else if (input.length === 1 && !key.ctrl && !key.meta && input !== ' ') {
-        setMode('prefix');
-        setPrefix(input);
+      else if (input === '/' && !key.ctrl && !key.meta) setMode('filter');
+      else if (key.tab) {
+        const insertion = selectedNode ? selectedNode.path + ' ' : '';
+        setCmdText(insertion);
+        setCmdCursor(insertion.length);
+        setMode('cmd');
+      } else if (input.length === 1 && !key.ctrl && !key.meta && input !== ' ') {
+        setCmdText(input);
+        setCmdCursor(1);
+        setMode('cmd');
       }
-    } else if (mode === 'prefix') {
-      if (key.escape) resetBar();
-      else if (key.return) doRun();
-      else if (key.tab) { setFileToggled(t => !t); setMode('suffix'); }
-      else setPrefix(p => editText(p, input, key));
+    } else if (mode === 'filter') {
+      if (key.escape) {
+        setFilterQuery('');
+        setMode('nav');
+        setNav({ cursor: 0, offset: 0 });
+      } else if (key.return) {
+        setMode('nav');
+      } else {
+        const next = editText(filterQuery, input, key);
+        if (next !== filterQuery) {
+          setFilterQuery(next);
+          setNav({ cursor: 0, offset: 0 });
+        }
+      }
     } else {
-      if (key.escape) resetBar();
-      else if (key.return) doRun();
-      else if (key.tab) setFileToggled(t => !t);
-      else setSuffix(s => editText(s, input, key));
+      if (key.escape) {
+        resetBar();
+      } else if (key.return) {
+        doRun();
+      } else if (key.tab) {
+        if (selectedNode) {
+          const insertion = selectedNode.path;
+          setCmdText(prev => insertAtCursor(insertion, prev, cmdCursor));
+          setCmdCursor(pos => pos + insertion.length);
+        }
+      } else if (key.leftArrow) {
+        setCmdCursor(pos => Math.max(0, pos - 1));
+      } else if (key.rightArrow) {
+        setCmdCursor(pos => Math.min(cmdText.length, pos + 1));
+      } else if (key.backspace || key.delete) {
+        if (cmdCursor > 0) {
+          setCmdText(prev => prev.slice(0, cmdCursor - 1) + prev.slice(cmdCursor));
+          setCmdCursor(pos => pos - 1);
+        }
+      } else if (input && !key.ctrl && !key.meta) {
+        setCmdText(prev => insertAtCursor(input, prev, cmdCursor));
+        setCmdCursor(pos => pos + input.length);
+      }
     }
   });
 
@@ -224,8 +290,8 @@ export default function App({ cwd, gitMode, maxDepth, showWelcome, onCommand, sh
     );
   }
 
-  return (
-    <Box flexDirection="column">
+  const treePanel = (
+    <>
       {showBanner && BANNER.map((line, i) => (
         <Text key={i} dimColor>{line}</Text>
       ))}
@@ -254,25 +320,62 @@ export default function App({ cwd, gitMode, maxDepth, showWelcome, onCommand, sh
 
       <Text dimColor>{sep}</Text>
 
-      {mode === 'nav' ? (
-        <Text dimColor>  ↑↓ move  ←→ fold  [type] run  q quit</Text>
+      {mode === 'nav' && filterQuery ? (
+        <Text dimColor>  [/] filter: {filterQuery}  ↑↓ move  ←→ fold  [/] re-filter  q quit</Text>
+      ) : mode === 'nav' ? (
+        <Text dimColor>  ↑↓ move  ←→ fold  [type] run  q quit{hasOutput ? '  [[] ] scroll output' : ''}</Text>
+      ) : mode === 'filter' ? (
+        <Box>
+          <Text color="cyan">/ {filterQuery}█</Text>
+          <Text dimColor>   [↵] confirm  [Esc] clear + exit</Text>
+        </Box>
       ) : (
         <Box>
-          <Text color={mode === 'prefix' ? 'cyan' : undefined}>{prefix}</Text>
-          <Text> </Text>
-          <Text
-            color={fileToggled ? 'blue' : undefined}
-            bold={fileToggled}
-            dimColor={!fileToggled}
-          >
-            {selectedNode?.name ?? ''}
-          </Text>
-          <Text> </Text>
-          <Text color={mode === 'suffix' ? 'cyan' : undefined}>{suffix}</Text>
-          <Text color="cyan">▌</Text>
-          <Text dimColor>   [Tab] toggle file  [↵] run  [Esc] cancel</Text>
+          <Text color="cyan">{`> `}</Text>
+          <Text>{cmdText.slice(0, cmdCursor)}</Text>
+          <Text inverse>{cmdText[cmdCursor] ?? ' '}</Text>
+          <Text>{cmdText.slice(cmdCursor + 1)}</Text>
+          <Text dimColor>   [Tab] insert file  [↵] run  [Esc] cancel</Text>
         </Box>
       )}
+    </>
+  );
+
+  if (hasOutput) {
+    const panelLines = treeHeight - 2;
+    const visibleOutput = outputLines.slice(outputScroll, outputScroll + panelLines);
+    const canScroll = outputLines.length > panelLines;
+
+    return (
+      <Box flexDirection="row">
+        <Box flexDirection="column" flexGrow={1}>
+          {treePanel}
+        </Box>
+        <Box
+          flexDirection="column"
+          flexGrow={1}
+          borderStyle="single"
+          borderLeft={true}
+          borderRight={false}
+          borderTop={false}
+          borderBottom={false}
+        >
+          <Text dimColor>$ {lastCmd}</Text>
+          <Text dimColor>{'─'.repeat(20)}</Text>
+          {visibleOutput.map((line, i) => (
+            <Text key={i}>{line}</Text>
+          ))}
+          {canScroll && (
+            <Text dimColor>[[] ] or Shift+↑↓ to scroll</Text>
+          )}
+        </Box>
+      </Box>
+    );
+  }
+
+  return (
+    <Box flexDirection="column">
+      {treePanel}
     </Box>
   );
 }

@@ -39,6 +39,8 @@ const props = {
 
 async function main() {
   let firstRun = true;
+  let lastCmd = '';
+  let outputLines: string[] = [];
 
   while (true) {
     const rows = process.stdout.rows ?? 24;
@@ -50,6 +52,8 @@ async function main() {
       React.createElement(App, {
         ...props,
         showBanner: firstRun && Boolean(opts['banner']),
+        lastCmd,
+        outputLines,
         onCommand: (cmd: string) => {
           pendingCmd = cmd;
         },
@@ -61,12 +65,16 @@ async function main() {
 
     if (pendingCmd) {
       // Ink has already restored the terminal — run the command in the normal shell
+      lastCmd = pendingCmd;
       const result = spawnSync(pendingCmd, { shell: true, stdio: ['inherit', 'pipe', 'pipe'] });
       if (result.stdout) process.stdout.write(result.stdout);
+      const stdout = result.stdout?.toString() ?? '';
+      const stderr = result.stderr?.toString() ?? '';
+      outputLines = (stdout || stderr).split('\n');
       if (result.status !== 0) {
-        const stderr = result.stderr?.toString().trim().slice(0, 200) ?? '';
+        const errSnippet = stderr.trim().slice(0, 200);
         console.log(chalk.red(`\n✗ Command failed (exit ${result.status})`));
-        if (stderr) console.log(chalk.dim(stderr));
+        if (errSnippet) console.log(chalk.dim(errSnippet));
       } else {
         console.log(chalk.green('\n✓ Done'));
       }
