@@ -139,7 +139,7 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
   }
 
   function doExpand(node: FileNode) {
-    if (!node.isDir || expanded.has(node.path) || node.depth >= maxDepth) return;
+    if (!node.isDir || expanded.has(node.path)) return;
     const children = readChildren(node.path, node.depth + 1);
     setNodes(prev => insertAfter(prev, node.path, children));
     setExpanded(prev => new Set(prev).add(node.path));
@@ -287,7 +287,8 @@ export default function App({ cwd, gitMode, maxDepth, onCommand, showBanner = tr
         const isActive = i + nav.offset === nav.cursor;
         const gitStatus = gitMap.get(node.path);
         const indent = '  '.repeat(node.depth);
-        const arrow = node.isDir ? (expanded.has(node.path) ? '▼ ' : '▶ ') : '  ';
+        const atDepthLimit = node.isDir && !expanded.has(node.path) && node.depth >= maxDepth;
+        const arrow = node.isDir ? (expanded.has(node.path) ? '▼ ' : (atDepthLimit ? '▶+' : '▶ ')) : '  ';
 
         let color: string | undefined;
         if (gitStatus === 'modified') color = 'yellow';
