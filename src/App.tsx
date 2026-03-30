@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
 import type { Key } from 'ink';
-import { dirname } from 'path';
+import { dirname, relative } from 'path';
 import { readChildren, insertAfter, removeDescendants, FileNode } from './utils/files.js';
 import { getGitStatuses, GitStatus } from './utils/git.js';
 export interface HistoryEntry {
@@ -223,7 +223,7 @@ export default function App({ cwd: initialCwd, gitMode, maxDepth, onCommand, onC
       else if (input === '-' && !key.ctrl && !key.meta) navigateUp();
       else if (input === '/' && !key.ctrl && !key.meta) setMode('filter');
       else if (key.tab) {
-        const insertion = selectedNode ? selectedNode.path + ' ' : '';
+        const insertion = selectedNode ? relative(cwd, selectedNode.path) + ' ' : '';
         setCmdText(insertion);
         setCmdCursor(insertion.length);
         setHistoryIdx(-1);
@@ -255,7 +255,7 @@ export default function App({ cwd: initialCwd, gitMode, maxDepth, onCommand, onC
         doRun();
       } else if (key.tab) {
         if (selectedNode) {
-          const insertion = selectedNode.path;
+          const insertion = relative(cwd, selectedNode.path);
           setCmdText(prev => insertAtCursor(insertion, prev, cmdCursor));
           setCmdCursor(pos => pos + insertion.length);
         }

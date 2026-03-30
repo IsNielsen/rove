@@ -17,4 +17,5 @@ Thumbs.db
 
 # Agents
 CLAUDE.md
-.cluade
+.cluade/
+.claude
