@@ -67,6 +67,10 @@ export default function App({ cwd: initialCwd, gitMode, maxDepth, onCommand, onC
   const [historyScroll, setHistoryScroll] = useState(0);
   const [historyIdx, setHistoryIdx] = useState(-1);
   const cmdDraft = useRef('');
+  const navRef = useRef(nav);
+  const visibleNodesRef = useRef<FileNode[]>([]);
+  const expandedRef = useRef<Set<string>>(new Set());
+  const treeHeightRef = useRef(0);
 
   const HISTORY_PANEL_HEIGHT = 8;
 
@@ -313,6 +317,70 @@ export default function App({ cwd: initialCwd, gitMode, maxDepth, onCommand, onC
       }
     }
   });
+
+  // Keep refs in sync for mouse handler (avoids stale closures)
+  useEffect(() => { navRef.current = nav; });
+  useEffect(() => { visibleNodesRef.current = visibleNodes; });
+  useEffect(() => { expandedRef.current = expanded; });
+  useEffect(() => { treeHeightRef.current = treeHeight; });
+
+  // Enable SGR extended mouse tracking; parse click events from raw stdin
+  useEffect(() => {
+    process.stdout.write('\x1b[?1000h\x1b[?1006h');
+    const handler = (data: Buffer) => {
+      const str = data.toString();
+      // SGR format: ESC[<btn;col;rowM (press) or ESC[<btn;col;rowm (release)
+      const m = str.match(/\x1b\[<(\d+);(\d+);(\d+)([Mm])/);
+      if (!m) return;
+      const btn = parseInt(m[1]);
+      const row = parseInt(m[3]);
+      const isRelease = m[4] === 'm';
+      if (btn !== 0 || !isRelease) return; // left-click release only
+      const bannerRows = showBanner ? BANNER.length : 0;
+      const treeRowIndex = row - 1 - bannerRows;
+      const curNav = navRef.current;
+      const curNodes = visibleNodesRef.current;
+      const curExpanded = expandedRef.current;
+      const curHeight = treeHeightRef.current;
+      if (treeRowIndex < 0 || treeRowIndex >= curHeight) return;
+      const nodeIndex = curNav.offset + treeRowIndex;
+      if (nodeIndex < 0 || nodeIndex >= curNodes.length) return;
+      if (nodeIndex === curNav.cursor) {
+        const node = curNodes[nodeIndex];
+        if (node.isDir) {
+          if (curExpanded.has(node.path)) {
+            setNodes(prev => removeDescendants(prev, node.path, node.depth));
+            setExpanded(prev => {
+              const next = new Set(prev);
+              for (const p of prev) {
+                if (p === node.path || p.startsWith(node.path + '/')) next.delete(p);
+              }
+              return next;
+            });
+          } else {
+            const children = readChildren(node.path, node.depth + 1);
+            setNodes(prev => insertAfter(prev, node.path, children));
+            setExpanded(prev => new Set(prev).add(node.path));
+          }
+        }
+      } else {
+        const len = curNodes.length;
+        const buffer = 5;
+        setNav(({ offset }) => {
+          const c = Math.max(0, Math.min(nodeIndex, len - 1));
+          let o = offset;
+          if (c < offset + buffer) o = Math.max(0, c - buffer);
+          else if (c >= offset + curHeight - buffer) o = Math.min(Math.max(0, len - curHeight), c - curHeight + buffer + 1);
+          return { cursor: c, offset: o };
+        });
+      }
+    };
+    process.stdin.on('data', handler);
+    return () => {
+      process.stdout.write('\x1b[?1000l\x1b[?1006l');
+      process.stdin.off('data', handler);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (showHelp) {
     return (
