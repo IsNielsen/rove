@@ -63,6 +63,7 @@ export default function App({ cwd: initialCwd, gitMode, maxDepth, onCommand, onC
   const [gitMap, setGitMap] = useState<Map<string, GitStatus>>(new Map());
   const [showHelp, setShowHelp] = useState(false);
   const lastGPress = useRef<number>(0);
+  const lastClickRef = useRef<{ index: number; time: number } | null>(null);
   const [filterQuery, setFilterQuery] = useState('');
   const [historyScroll, setHistoryScroll] = useState(0);
   const [historyIdx, setHistoryIdx] = useState(-1);
@@ -155,6 +156,22 @@ export default function App({ cwd: initialCwd, gitMode, maxDepth, onCommand, onC
     setExpanded(prev => new Set(prev).add(node.path));
   }
 
+  function navigateInto(node: FileNode) {
+    if (!node.isDir) return;
+    setCwd(node.path);
+    setNodes(readChildren(node.path, 0));
+    setExpanded(new Set());
+    setNav({ cursor: 0, offset: 0 });
+    onCwdChange?.(node.path);
+  }
+
+  function openFile(node: FileNode) {
+    const editor = process.env['ROVE_OPEN'] ?? process.env['EDITOR'] ?? 'nano';
+    const quoted = "'" + node.path.replace(/'/g, "'\\''") + "'";
+    onCommand(`${editor} ${quoted}`);
+    exit();
+  }
+
   function navigateUp() {
     const parent = dirname(cwd);
     if (parent === cwd) return; // already at filesystem root
@@ -232,6 +249,9 @@ export default function App({ cwd: initialCwd, gitMode, maxDepth, onCommand, onC
         setCmdCursor(insertion.length);
         setHistoryIdx(-1);
         setMode('cmd');
+      } else if (key.return) {
+        if (selectedNode?.isDir) navigateInto(selectedNode);
+        else if (selectedNode) openFile(selectedNode);
       } else if (input === ':' && !key.ctrl && !key.meta) {
         setCmdText('');
         setCmdCursor(0);
@@ -347,20 +367,41 @@ export default function App({ cwd: initialCwd, gitMode, maxDepth, onCommand, onC
       if (nodeIndex < 0 || nodeIndex >= curNodes.length) return;
       if (nodeIndex === curNav.cursor) {
         const node = curNodes[nodeIndex];
-        if (node.isDir) {
-          if (curExpanded.has(node.path)) {
-            setNodes(prev => removeDescendants(prev, node.path, node.depth));
-            setExpanded(prev => {
-              const next = new Set(prev);
-              for (const p of prev) {
-                if (p === node.path || p.startsWith(node.path + '/')) next.delete(p);
-              }
-              return next;
-            });
+        const now = Date.now();
+        const last = lastClickRef.current;
+        if (last && last.index === nodeIndex && now - last.time < 400) {
+          // Double-click
+          lastClickRef.current = null;
+          if (node.isDir) {
+            setCwd(node.path);
+            setNodes(readChildren(node.path, 0));
+            setExpanded(new Set());
+            setNav({ cursor: 0, offset: 0 });
+            onCwdChange?.(node.path);
           } else {
-            const children = readChildren(node.path, node.depth + 1);
-            setNodes(prev => insertAfter(prev, node.path, children));
-            setExpanded(prev => new Set(prev).add(node.path));
+            const editor = process.env['ROVE_OPEN'] ?? process.env['EDITOR'] ?? 'nano';
+            const quoted = "'" + node.path.replace(/'/g, "'\\''") + "'";
+            onCommand(`${editor} ${quoted}`);
+            exit();
+          }
+        } else {
+          // First click on already-selected node: track for potential double-click; toggle dirs
+          lastClickRef.current = { index: nodeIndex, time: now };
+          if (node.isDir) {
+            if (curExpanded.has(node.path)) {
+              setNodes(prev => removeDescendants(prev, node.path, node.depth));
+              setExpanded(prev => {
+                const next = new Set(prev);
+                for (const p of prev) {
+                  if (p === node.path || p.startsWith(node.path + '/')) next.delete(p);
+                }
+                return next;
+              });
+            } else {
+              const children = readChildren(node.path, node.depth + 1);
+              setNodes(prev => insertAfter(prev, node.path, children));
+              setExpanded(prev => new Set(prev).add(node.path));
+            }
           }
         }
       } else {
@@ -393,6 +434,7 @@ export default function App({ cwd: initialCwd, gitMode, maxDepth, onCommand, onC
         <KeyBinding keys={['←', 'h']} description="Collapse directory" />
         <KeyBinding keys={['gg']} description="Jump to top" />
         <KeyBinding keys={['G']} description="Jump to bottom" />
+        <KeyBinding keys={['Enter']} description="Open file / navigate into dir" />
         <KeyBinding keys={['-']} description="Go to parent directory" />
         <KeyBinding keys={['/']} description="Filter files" />
         <KeyBinding keys={[':']} description="Open command bar" />
@@ -402,6 +444,11 @@ export default function App({ cwd: initialCwd, gitMode, maxDepth, onCommand, onC
         <KeyBinding keys={['?']} description="Toggle this help" />
         {gitMode && <KeyBinding keys={['r']} description="Refresh git status" />}
         <KeyBinding keys={['q']} description="Quit" />
+        <Text> </Text>
+        <Text bold>Editor</Text>
+        <Text> </Text>
+        <Text dimColor>  Set <Text color="cyan">$ROVE_OPEN</Text> or <Text color="cyan">$EDITOR</Text> to change which editor opens on Enter.</Text>
+        <Text dimColor>  e.g. <Text color="cyan">ROVE_OPEN=code rove</Text>   fallback: nano</Text>
         <Text> </Text>
         <Text dimColor>Press any key to close</Text>
       </Box>
@@ -442,7 +489,7 @@ export default function App({ cwd: initialCwd, gitMode, maxDepth, onCommand, onC
       {mode === 'nav' && filterQuery ? (
         <Text dimColor>  [/] filter: {filterQuery}  ↑↓ move  ←→ fold  [/] re-filter  q quit</Text>
       ) : mode === 'nav' ? (
-        <Text dimColor>  ↑↓ move | ←→ fold | [:] cmd | q quit | ? help{hasHistory ? '  [[] ] scroll history' : ''}</Text>
+        <Text dimColor>  ↑↓ move | ←→ fold | [↵] open | [:] cmd | q quit | ? help{hasHistory ? '  [[] ] scroll history' : ''}</Text>
       ) : mode === 'filter' ? (
         <Box>
           <Text color="cyan">/ {filterQuery}█</Text>
